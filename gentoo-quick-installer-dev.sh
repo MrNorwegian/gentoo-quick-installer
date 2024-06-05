@@ -2,14 +2,14 @@
 
 set -e
 
-HOSTNAME=${HOSTNAME:-Server1}
+HOSTNAME=${HOSTNAME:-TestServer710}
 
 # Uncomment CUSTOM_MIRROR to use a custom mirror, if commented the default gentoo mirror will be used
-# CUSTOM_MIRROR="http://mirror-a.example.com/gentoo http://mirror-b.example.com"
+CUSTOM_MIRROR=http://mirror.mylocaldomain.net/gentoo
 GENTOO_MIRROR=${CUSTOM_MIRROR:-http://distfiles.gentoo.org}
 
 # Set your region server
-RSYNC_MIRROR=rsync.gentoo.org
+RSYNC_MIRROR=rsync.europe.gentoo.org
 
 # Systemd is not tested (or supported) yet
 INIT=${INIT:-openrc}
@@ -22,13 +22,13 @@ STAGE=${STAGE:-STAGE3}
 STAGE4_VERSION=${STAGE4_VERSION:-latest}
 
 # IP to the rsync server
-RSYNC_HOST=${RSYNC_HOST:-}
-RSYNC_PASS=${RSYNC_PASS:-}
+RSYNC_HOST=${RSYNC_HOST:-172.18.0.255}
+RSYNC_PASS=${RSYNC_PASS:-pass123}
 
 # List of distcc servers to use (space separated)m emtpy to disable, if enabled distcc wil also be installed
-GENTOO_DISTCC="${GENTOO_DISTCC:-}"
+GENTOO_DISTCC="${GENTOO_DISTCC:-172.18.0.51/4 172.18.0.52/4 172.18.0.53/4 172.18.0.54/4 172.18.0.255/16}"
 # Number of distcc cpu's 
-GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-}
+GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-32}
 
 # Target disk to install to, default is /dev/sda but some virtual machines might use /dev/vda
 TARGET_DISK=${TARGET_DISK:-/dev/sda}
@@ -43,7 +43,7 @@ EMERGE_ARGS="${EMERGE_ARGS:---quiet-build}"
 EMERGE_PACKAGES="${EMERGE_PACKAGES:-sys-apps/mlocate app-admin/rsyslog app-admin/logrotate sys-process/cronie net-misc/chrony net-misc/dhcpcd app-admin/sudo app-admin/superadduser app-portage/mirrorselect app-shells/bash-completion}"
 
 # More custom packages 
-# EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin" 
+EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin" 
 
 EMERGE_MAKEPATH=/etc/portage/make.conf
 

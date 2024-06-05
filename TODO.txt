@@ -1,0 +1,34 @@
+Test rutines:
+* No arguments
+- install in archlinux live
+- install in gentoo live
+- install in systemrescue live
+- install in debian live
+
+* With arguments
+install with root RSA
+install with root password
+install with custom_user + password 
+install with custom_user + rsa
+install with distcc 
+install with stage4 
+install with rsync (instead of stage3\4)
+  - setting passwords\making cusom user
+  - installing software
+  - more?
+
+Test on 2GB ram server (NOTE TO SELF: archlinux fails to boot on 2GB)
+
+Change:
+- Rename variables and stuff to make more sense 
+- Make a sumary with password, installed software, etc
+- Check for PYTHON_SINGLE_TARGET version to set, had to make a temp fix due to multiple targets got dragged in
+- If partitions exist and is mounted i have to run the script twise, dunno why
+- Add support for setting static ip, else use dhcpcd (and add it to rc-update????)
+- instead for custom mirror of orgiginal mirror, use mirrorselect
+
+Idea:
+- Make stage4 from template server
+- Use rsync from a template server 
+- after rsync, change snmpd.conf and munin-node.conf (change ip)???
+- or can the template server have a script updating snmp and munin-node with current ip on eth0 ? :)
