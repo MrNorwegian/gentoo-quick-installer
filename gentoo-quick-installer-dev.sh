@@ -222,11 +222,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
   echo "GENTOO_MIRRORS=\"$GENTOO_MIRROR\"" >> $EMERGE_MAKEPATH
   # required to allow for linux-firmware (required for binary kernel).
   echo "sys-kernel/installkernel dracut" >> /etc/portage/package.use/installkernel
-  
-  if echo "$EMERGE_PACKAGES" | grep -q "net-analyzer/munin"; then
-    echo "net-analyzer/munin minimal -cgi" >> /etc/portage/package.use/munin
-    echo "dev-lang/perl berkdb" >> /etc/portage/package.use/perl
-  fi
+
   echo "ACCEPT_LICENSE=\"-* @FREE\"" >> $EMERGE_MAKEPATH
   echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" >> /etc/portage/package.license
   echo "MAKEOPTS=\"-j$(nproc)\"" >> $EMERGE_MAKEPATH
@@ -242,11 +238,10 @@ elif [ "$STAGE" = "STAGE3" ]; then
     echo "FEATURES=\"distcc\"" >> $EMERGE_MAKEPATH
     echo "$tmpmakeconf" >> $EMERGE_MAKEPATH
     for host in $GENTOO_DISTCC; do echo "$host" >> /etc/distcc/hosts ; done
-    rc-update add distccd default
     distcc-config --set-hosts "localhost $GENTOO_DISTCC"
   fi
 
-  echo -e "${CYAN}### Installing kernel, this might time some time!...${NC}"munin
+  echo -e "${CYAN}### Installing kernel, this might time some time!...${NC}"
   emerge $EMERGE_ARGS sys-kernel/linux-firmware sys-kernel/installkernel >> install-log.txt 2>/dev/null
   emerge $EMERGE_ARGS virtual/dist-kernel sys-kernel/gentoo-kernel-bin >> install-log.txt 2>/dev/null
 
@@ -265,6 +260,12 @@ elif [ "$STAGE" = "STAGE3" ]; then
   sed -i "s/hostname=\".*\"/hostname=\"${HOSTNAME}\"/" /etc/conf.d/hostname
   ln -s /etc/init.d/net.lo /etc/init.d/net.eth0
   rc-update add net.eth0 default
+
+  # TODO make a variable for this?
+  if echo "$EMERGE_PACKAGES" | grep -q "net-analyzer/munin"; then
+    echo "net-analyzer/munin minimal -cgi" >> /etc/portage/package.use/munin
+    echo "dev-lang/perl berkdb" >> /etc/portage/package.use/perl
+  fi
 
   if [ -n "$EMERGE_PACKAGES" ]; then
     echo -e "${CYAN}### Installing additional packages this might take some time...${NC}"
