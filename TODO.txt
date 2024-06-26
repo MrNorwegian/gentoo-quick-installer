@@ -26,9 +26,12 @@ Change:
 - If partitions exist and is mounted i have to run the script twise, dunno why
 - Add support for setting static ip, else use dhcpcd (and add it to rc-update????)
 - instead for custom mirror of orgiginal mirror, use mirrorselect
+- eselect profile set 1
 
 Idea:
 - Make stage4 from template server
 - Use rsync from a template server 
 - after rsync, change snmpd.conf and munin-node.conf (change ip)???
 - or can the template server have a script updating snmp and munin-node with current ip on eth0 ? :)
+- https://wiki.gentoo.org/wiki/Eix 
+- 

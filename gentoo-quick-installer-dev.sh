@@ -4,12 +4,18 @@ set -e
 
 HOSTNAME=${HOSTNAME:-TestServer710}
 
+# Set your timezone, available options are in /usr/share/zoneinfo/
+TIMEZONE=Europe/Oslo
+
 # Uncomment CUSTOM_MIRROR to use a custom mirror, if commented the default gentoo mirror will be used
-CUSTOM_MIRROR=http://mirror.mylocaldomain.net/gentoo
+CUSTOM_MIRROR=http://mirror.YOUR-LOCAL-SERVER.LAN/gentoo
+# Set your default mirror 
 GENTOO_MIRROR=${CUSTOM_MIRROR:-http://distfiles.gentoo.org}
 
-# Set your region server
-RSYNC_MIRROR=rsync.europe.gentoo.org
+# Uncomment CUSTOM_RSYNC_MIRROR to use a custom rsync mirror, if commented the default rsync server will be used
+CUSTOM_RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.YOUR-LOCAL-SERVER.LAN}
+# Set your default region rsync server
+RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.europe.gentoo.org}
 
 # Systemd is not tested (or supported) yet
 INIT=${INIT:-openrc}
@@ -25,10 +31,10 @@ STAGE4_VERSION=${STAGE4_VERSION:-latest}
 RSYNC_HOST=${RSYNC_HOST:-172.18.0.255}
 RSYNC_PASS=${RSYNC_PASS:-pass123}
 
-# List of distcc servers to use (space separated)m emtpy to disable, if enabled distcc wil also be installed
-GENTOO_DISTCC="${GENTOO_DISTCC:-172.18.0.51/4 172.18.0.52/4 172.18.0.53/4 172.18.0.54/4 172.18.0.255/16}"
+# List of distcc servers to use (space separated) comment to disable, if uncommented distcc wil be installed
+GENTOO_DISTCC="${GENTOO_DISTCC:-172.18.0.51/4 172.18.0.52/4 172.18.0.53/4 172.18.0.54/4}"
 # Number of distcc cpu's 
-GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-32}
+GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-16}
 
 # Target disk to install to, default is /dev/sda but some virtual machines might use /dev/vda
 TARGET_DISK=${TARGET_DISK:-/dev/sda}
@@ -45,8 +51,6 @@ EMERGE_PACKAGES="${EMERGE_PACKAGES:-sys-apps/mlocate app-admin/rsyslog app-admin
 # More custom packages 
 EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin" 
 
-EMERGE_MAKEPATH=/etc/portage/make.conf
-
 # Services to add to rc-update (autostart on boot) after stage3 (stage 4 and rsync wil not add these)
 RC_UPDATE="${RC_UPDATE:-sshd rsyslog cronie chronyd}"
 
@@ -57,6 +61,8 @@ CUSTOM_USER=${CUSTOM_USER:-MYUSERNAME}
 CUSTOMUSER_PASSWORD="${CUSTOMUSER_PASSWORD:-pass123}"
 CUSTOMUSER_SSH_PUBLIC_KEY="${CUSTOMUSER_SSH_PUBLIC_KEY:-}"
 REQUIRED_PACKAGES="wget ntp"
+
+EMERGE_MAKEPATH=/etc/portage/make.conf
 
 GENTOO_STAGE3=$GENTOO_ARCH-$INIT
 GRUB_PLATFORMS=${GRUB_PLATFORMS:-pc}
@@ -167,7 +173,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
   rm -f "$(basename "$STAGE3_URL")"
 
   echo "# added by gentoo installer" >> /mnt/gentoo/etc/fstab 
-  echo "LABEL=boot /boot ext4 noauto,noatime 1 2" >> /mnt/gentoo/etc/fstab 
+  echo "LABEL=boot /boot ext4 noatime        1 2" >> /mnt/gentoo/etc/fstab 
   echo "LABEL=swap none  swap sw             0 0" >> /mnt/gentoo/etc/fstab 
   echo "LABEL=root /     ext4 noatime        0 1" >> /mnt/gentoo/etc/fstab 
 
@@ -206,6 +212,8 @@ elif [ "$STAGE" = "STAGE3" ]; then
   env-update
   source /etc/profile
 
+  ln -s /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+  echo "$TIMEZONE" > /etc/timezone
   echo -e "${CYAN}### Setting up portage...${NC}"
   mkdir -p /etc/portage/repos.conf
   cp -f /usr/share/portage/config/repos.conf /etc/portage/repos.conf/gentoo.conf
@@ -226,6 +234,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
   echo "ACCEPT_LICENSE=\"-* @FREE\"" >> $EMERGE_MAKEPATH
   echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" >> /etc/portage/package.license
   echo "MAKEOPTS=\"-j$(nproc)\"" >> $EMERGE_MAKEPATH
+  echo "EMERGE_DEFAULT_OPTS=\"--jobs=$(nproc) --load-average=16 --with-bdeps=y -D\"" >> $EMERGE_MAKEPATH
   echo "GRUB_PLATFORMS=\"$GRUB_PLATFORMS\"" >> $EMERGE_MAKEPATH
 
 
@@ -275,6 +284,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
     done 
     emerge $EMERGE_ARGS $EMERGE_PACKAGES >> install-log.txt 2>/dev/null
   fi
+  echo "EMERGE_DEFAULT_OPTS=\"--jobs=$(nproc) --load-average=16 --quiet-build --with-bdeps=y --complete-graph=y -avD\"" >> $EMERGE_MAKEPATH
 
   if [ -n "$RC_UPDATE" ]; then
     echo -e "${CYAN}### Adding \"$RC_UPDATE\" to rc-update...${NC}"
@@ -303,8 +313,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
 
   if [ -n "$CUSTOM_USER" ] && [ -n "$CUSTOMUSER_PASSWORD" ]; then
     echo -e "${CYAN}### Adding custom user and setting password...${NC}"
-    useradd -m -G users -s /bin/bash $CUSTOM_USER
-    gpasswd -a $CUSTOM_USER wheel
+    useradd -m -G users,wheel,cron -s /bin/bash $CUSTOM_USER
     echo -e "$CUSTOM_USER:$CUSTOMUSER_PASSWORD" | chpasswd >> install-log.txt
     if command -v sudo > /dev/null; then 
       mkdir /etc/sudoers.d/
