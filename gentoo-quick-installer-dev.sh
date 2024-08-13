@@ -8,31 +8,37 @@ HOSTNAME=${HOSTNAME:-TestServer710}
 TIMEZONE=Europe/Oslo
 
 # Uncomment CUSTOM_MIRROR to use a custom mirror, if commented the default gentoo mirror will be used
-CUSTOM_MIRROR=http://mirror.YOUR-LOCAL-SERVER.LAN/gentoo
+CUSTOM_MIRROR=http://mirror.LOCALDOMAIN.NET/gentoo
+
 # Set your default mirror 
 GENTOO_MIRROR=${CUSTOM_MIRROR:-http://distfiles.gentoo.org}
 
 # Uncomment CUSTOM_RSYNC_MIRROR to use a custom rsync mirror, if commented the default rsync server will be used
-CUSTOM_RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.YOUR-LOCAL-SERVER.LAN}
-# Set your default region rsync server
+CUSTOM_RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.LOCALDOMAIN.NET}
+
+# Set your default region rsync server (default is rsync.gentoo.org)
 RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.europe.gentoo.org}
 
-# Systemd is not tested (or supported) yet
+# Systemd is not tested (or supported) yet, if you want to test it, set -systemd and change USE_FLAGS to "-systemd" ( One -, not two!)
 INIT=${INIT:-openrc}
 
 # Architecture to use, available option are amd64 (not tested anything else)
 GENTOO_ARCH=${GENTOO_ARCH:-amd64}
 
-# Stage to use, available options are STAGE3, STAGE4, RSYNC
-STAGE=${STAGE:-STAGE3}
+# Stage to use, available options are STAGE3 (default), STAGE4 (custom), RSYNC
+# NOTE, when using RSYNC no configuration or software will be installed, only the base system from the source server
+STAGE=${STAGE:-RSYNC}
 STAGE4_VERSION=${STAGE4_VERSION:-latest}
 
-# IP to the rsync server
-RSYNC_HOST=${RSYNC_HOST:-172.18.0.255}
-RSYNC_PASS=${RSYNC_PASS:-pass123}
+# IP to the source server (the server you want to clone from, in my case custom "template" server), this is only used when using RSYNC in STAGE above
+STAGE4_HOST=${STAGE4_HOST:-172.18.0.255}
+
+# Root ssh password on source server, ensure you can ssh to root
+STAGE4_PASS=${STAGE4_PASS:-pass123}
 
 # List of distcc servers to use (space separated) comment to disable, if uncommented distcc wil be installed
 GENTOO_DISTCC="${GENTOO_DISTCC:-172.18.0.51/4 172.18.0.52/4 172.18.0.53/4 172.18.0.54/4}"
+
 # Number of distcc cpu's 
 GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-16}
 
@@ -45,21 +51,24 @@ USE_FLAGS="${USE_FLAGS:--systemd -X -gtk -gnome -kde -mysql -mariadb syslog open
 # If you are in a hurry, you can remove -uD, this wil not update related packages, note --quiet-build will then be ---quiet-build with triple dash
 EMERGE_ARGS="${EMERGE_ARGS:---quiet-build}"
 
-# Packages to install after stage3 (stage 4 and rsync wil not install these)
-EMERGE_PACKAGES="${EMERGE_PACKAGES:-sys-apps/mlocate app-admin/rsyslog app-admin/logrotate sys-process/cronie net-misc/chrony net-misc/dhcpcd app-admin/sudo app-admin/superadduser app-portage/mirrorselect app-shells/bash-completion}"
+# Packages to install after stage3 (For stage3 only)
+EMERGE_PACKAGES="${EMERGE_PACKAGES:-app-admin/eclean-kernel app-portage/gentoolkit sys-apps/mlocate app-admin/rsyslog app-admin/logrotate sys-process/cronie net-misc/chrony net-misc/dhcpcd app-admin/sudo app-admin/superadduser app-portage/mirrorselect app-shells/bash-completion}"
 
-# More custom packages 
-EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin" 
+# More custom packages (For stage3 only)
+EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin dev-vcs/git" 
 
 # Services to add to rc-update (autostart on boot) after stage3 (stage 4 and rsync wil not add these)
 RC_UPDATE="${RC_UPDATE:-sshd rsyslog cronie chronyd}"
 
+# (For stage3 only)
 ROOT_PASSWORD="${ROOT_PASSWORD:-pass123}"
 ROOT_SSH_PUBLIC_KEY="${ROOT_SSH_PUBLIC_KEY:-}"
 
+# (For stage3 only)
 CUSTOM_USER=${CUSTOM_USER:-MYUSERNAME}
 CUSTOMUSER_PASSWORD="${CUSTOMUSER_PASSWORD:-pass123}"
 CUSTOMUSER_SSH_PUBLIC_KEY="${CUSTOMUSER_SSH_PUBLIC_KEY:-}"
+
 REQUIRED_PACKAGES="wget ntp"
 
 EMERGE_MAKEPATH=/etc/portage/make.conf
@@ -149,9 +158,14 @@ if [ "$STAGE" = "STAGE4" ]; then
   rm -f "$(basename "$STAGE4_URL")"
 
 elif [ "$STAGE" = "RSYNC" ]; then
-  echo -e "${RED}### RSYNC is not finished, sorry ${NC}"
-  exit 1
-  rsync -avAXHW --numeric-ids --info=progress2 \
+  # echo -e "${RED}### RSYNC is not finished, sorry ${NC}"
+  # exit 1
+  echo -e "${RED}### RSYNC is not finished, but under testing, continue running this on your own risk...${NC}"
+  for i in {5..1}; do echo -e "${YELLOW}### Starting rsync in $i seconds, press CTRL+C to cancel...${NC}" && sleep 1; done
+
+  echo -e "${CYAN}### Installing using rsync...${NC}"
+  # echo -e "${YELLOW}#### Please provide root passwors to $STAGE4_HOST ...${NC}"
+  sshpass -p "$STAGE4_PASS" rsync -avAXHW --numeric-ids --info=progress2 \
     --exclude='/dev/*' \
     --exclude='/proc/*' \
     --exclude='/sys/*' \
@@ -160,7 +174,32 @@ elif [ "$STAGE" = "RSYNC" ]; then
     --exclude='/mnt/*' \
     --exclude='/media/*' \
     --exclude='/lost+found/' \
-    rsync://$RSYNC_HOST/ /mnt/gentoo/
+    -e "ssh -o StrictHostKeyChecking=no" \
+    $STAGE4_HOST:/ /mnt/gentoo/
+
+  mount --types proc /proc /mnt/gentoo/proc
+  mount --rbind /sys /mnt/gentoo/sys
+  mount --rbind /dev /mnt/gentoo/dev
+  mount --bind /run /mnt/gentoo/run
+
+  echo -e "${CYAN}### Changing root...${NC}"
+  cp /etc/resolv.conf /mnt/gentoo/etc/
+  chroot /mnt/gentoo /bin/bash -s <<- EOF
+  #!/bin/bash
+
+  set -e
+
+  env-update
+  source /etc/profile
+
+  # fstab
+  grub-install ${TARGET_DISK} >> install-log.txt
+  grub-mkconfig -o /boot/grub/grub.cfg >> install-log.txt
+
+  echo -e "${GREEN}### Finshed, time to reboot...${NC}"
+  echo -e "${YELLOW}### Remember, rsync does NOT modify any configs, set any passwords or install any software! ${NC}"
+  echo -e "${YELLOW}### If you need to change anything from the source server you should do it now.${NC}"
+EOF
 
 elif [ "$STAGE" = "STAGE3" ]; then
   echo -e "${CYAN}### Installing stage3...${NC}"
@@ -195,18 +234,12 @@ elif [ "$STAGE" = "STAGE3" ]; then
   chmod 1777 /dev/shm 
   if [ -d "/run/shm" ]; then chmod 1777 /run/shm ; fi
 
-  echo -e "${CYAN}### Changing root...${NC}"
-  cp /etc/resolv.conf /mnt/gentoo/etc/
   echo -e "${CYAN}### Entering chroot...${NC}"
+  cp /etc/resolv.conf /mnt/gentoo/etc/
   chroot /mnt/gentoo /bin/bash -s <<- EOF
   #!/bin/bash
 
   set -e
-
-  CYAN=\$CYAN
-  YELLOW=\$YELLOW
-  RED=\$RED
-  NC=\$NC
 
   echo -e "${CYAN}### Upading configuration...${NC}"
   env-update
@@ -330,13 +363,14 @@ elif [ "$STAGE" = "STAGE3" ]; then
     fi
   else
     echo -e "${CYAN}### Custom user not set, allowing root to login to ssh...${NC}"
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    echo -e "PermitRootLogin yes" >> /etc/ssh/sshd_config.d/99-sshroot.conf
   fi
+  echo -e "${GREEN}### Finshed, time to reboot...${NC}"
+  echo -e "${GREEN}### Password for root and custom_user (if set) is in the scriptfile if you didnt set it...${NC}"
 EOF
 else
   echo -e "${RED}### Unsupported stage: $STAGE${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}### Finshed, time to reboot...${NC}"
-echo -e "${GREEN}### Password for root and custom_user (if set) is in the scriptfile if you didnt set it...${NC}"
+

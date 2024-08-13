@@ -1,10 +1,14 @@
 # gentoo-quick-installer
 
+## FYI
+
+This script was built only to learn bash and testing Gentoo, it's alot of bugs and unfinished stuff, it was fun making this but i'm not going to finish this since it was just a vacation project (got boored)
+
 ## About
 
-This is a quick installer script that can be used to bootstrap amd64 Gentoo Linux quickly.
+This is a quick installer script that can be used to install1 amd64 Gentoo Linux quickly and easy.
 
-Script has been tested with method 1 on using systemrescuecd and archlinux live cd's:
+Script has been tested with using systemrescuecd and archlinux live cd's:
 - Proxmox VM 
 - Lenovo L480 
 - HP 430
@@ -72,7 +76,6 @@ systemd is a alternative for openrc
 STAGE3 is default
 
 STAGE4 is custom stage3, requires you to edit CUSTOM_MIRROR="http://....../gentoo"
-
 
 - STAGE4_VERSION=latest
 latest is default

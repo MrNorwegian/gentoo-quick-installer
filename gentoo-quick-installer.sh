@@ -2,33 +2,44 @@
 
 set -e
 
-HOSTNAME=${HOSTNAME:-Server1}
+HOSTNAME=${HOSTNAME:-Gentoo}
+
+# Set your timezone, available options are in /usr/share/zoneinfo/
+TIMEZONE=Europe/Oslo
 
 # Uncomment CUSTOM_MIRROR to use a custom mirror, if commented the default gentoo mirror will be used
-# CUSTOM_MIRROR="http://mirror-a.example.com/gentoo http://mirror-b.example.com"
+# CUSTOM_MIRROR=http://mirror.LOCALDOMAIN.NET/gentoo
+
+# Set your default mirror 
 GENTOO_MIRROR=${CUSTOM_MIRROR:-http://distfiles.gentoo.org}
 
-# Set your region server
-RSYNC_MIRROR=rsync.gentoo.org
+# Uncomment CUSTOM_RSYNC_MIRROR to use a custom rsync mirror, if commented the default rsync server will be used
+# CUSTOM_RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.LOCALDOMAIN.NET}
 
-# Systemd is not tested (or supported) yet
+# Set your default region rsync server (default is rsync.gentoo.org)
+RSYNC_MIRROR=${CUSTOM_RSYNC_MIRROR:-rsync.europe.gentoo.org}
+
+# Systemd is not tested (or supported) yet, if you want to test it, set -systemd and change USE_FLAGS to "-systemd" ( One -, not two!)
 INIT=${INIT:-openrc}
 
 # Architecture to use, available option are amd64 (not tested anything else)
 GENTOO_ARCH=${GENTOO_ARCH:-amd64}
 
-# Stage to use, available options are STAGE3, STAGE4, RSYNC
+# Stage to use, available options are STAGE3 (default), STAGE4 (custom), RSYNC
+# NOTE, when using RSYNC no configuration or software will be installed, only the base system from the source server
 STAGE=${STAGE:-STAGE3}
 STAGE4_VERSION=${STAGE4_VERSION:-latest}
 
-# IP to the rsync server
-RSYNC_HOST=${RSYNC_HOST:-}
-RSYNC_PASS=${RSYNC_PASS:-}
+# IP to the source server (the server you want to clone from, in my case custom "template" server), this is only used when using RSYNC in STAGE above
+#STAGE4_HOST=${STAGE4_HOST:-172.18.0.255}
 
-# List of distcc servers to use (space separated)m emtpy to disable, if enabled distcc wil also be installed
-GENTOO_DISTCC="${GENTOO_DISTCC:-}"
+# Root ssh password on source server, ensure you can ssh to root
+# STAGE4_PASS=${STAGE4_PASS:-pass123}
+
+# List of distcc servers to use (space separated) comment to disable, if uncommented distcc wil be installed
+# GENTOO_DISTCC="${GENTOO_DISTCC:-172.18.0.51/4 172.18.0.52/4 172.18.0.53/4 172.18.0.54/4}"
 # Number of distcc cpu's 
-GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-}
+# GENTOO_DISTCC_NUM=${GENTOO_DISTCC_NUM:-16}
 
 # Target disk to install to, default is /dev/sda but some virtual machines might use /dev/vda
 TARGET_DISK=${TARGET_DISK:-/dev/sda}
@@ -39,24 +50,27 @@ USE_FLAGS="${USE_FLAGS:--systemd -X -gtk -gnome -kde -mysql -mariadb syslog open
 # If you are in a hurry, you can remove -uD, this wil not update related packages, note --quiet-build will then be ---quiet-build with triple dash
 EMERGE_ARGS="${EMERGE_ARGS:---quiet-build}"
 
-# Packages to install after stage3 (stage 4 and rsync wil not install these)
-EMERGE_PACKAGES="${EMERGE_PACKAGES:-sys-apps/mlocate app-admin/rsyslog app-admin/logrotate sys-process/cronie net-misc/chrony net-misc/dhcpcd app-admin/sudo app-admin/superadduser app-portage/mirrorselect app-shells/bash-completion}"
+# Packages to install after stage3 (For stage3 only)
+EMERGE_PACKAGES="${EMERGE_PACKAGES:-app-admin/eclean-kernel app-portage/gentoolkit sys-apps/mlocate app-admin/rsyslog app-admin/logrotate sys-process/cronie net-misc/chrony net-misc/dhcpcd app-admin/sudo app-admin/superadduser app-portage/mirrorselect app-shells/bash-completion}"
 
-# More custom packages 
-# EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin" 
-
-EMERGE_MAKEPATH=/etc/portage/make.conf
+# More custom packages (For stage3 only)
+# EMERGE_PACKAGES="$EMERGE_PACKAGES net-analyzer/net-snmp net-analyzer/munin dev-vcs/git" 
 
 # Services to add to rc-update (autostart on boot) after stage3 (stage 4 and rsync wil not add these)
 RC_UPDATE="${RC_UPDATE:-sshd rsyslog cronie chronyd}"
 
+# (For stage3 only)
 ROOT_PASSWORD="${ROOT_PASSWORD:-pass123}"
 ROOT_SSH_PUBLIC_KEY="${ROOT_SSH_PUBLIC_KEY:-}"
 
+# (For stage3 only)
 CUSTOM_USER=${CUSTOM_USER:-MYUSERNAME}
 CUSTOMUSER_PASSWORD="${CUSTOMUSER_PASSWORD:-pass123}"
 CUSTOMUSER_SSH_PUBLIC_KEY="${CUSTOMUSER_SSH_PUBLIC_KEY:-}"
+
 REQUIRED_PACKAGES="wget ntp"
+
+EMERGE_MAKEPATH=/etc/portage/make.conf
 
 GENTOO_STAGE3=$GENTOO_ARCH-$INIT
 GRUB_PLATFORMS=${GRUB_PLATFORMS:-pc}
@@ -143,9 +157,14 @@ if [ "$STAGE" = "STAGE4" ]; then
   rm -f "$(basename "$STAGE4_URL")"
 
 elif [ "$STAGE" = "RSYNC" ]; then
-  echo -e "${RED}### RSYNC is not finished, sorry ${NC}"
-  exit 1
-  rsync -avAXHW --numeric-ids --info=progress2 \
+  # echo -e "${RED}### RSYNC is not finished, sorry ${NC}"
+  # exit 1
+  echo -e "${RED}### RSYNC is not finished, but under testing, continue running this on your own risk...${NC}"
+  for i in {5..1}; do echo -e "${YELLOW}### Starting rsync in $i seconds, press CTRL+C to cancel...${NC}" && sleep 1; done
+
+  echo -e "${CYAN}### Installing using rsync...${NC}"
+  # echo -e "${YELLOW}#### Please provide root passwors to $STAGE4_HOST ...${NC}"
+  sshpass -p "$STAGE4_PASS" rsync -avAXHW --numeric-ids --info=progress2 \
     --exclude='/dev/*' \
     --exclude='/proc/*' \
     --exclude='/sys/*' \
@@ -154,7 +173,32 @@ elif [ "$STAGE" = "RSYNC" ]; then
     --exclude='/mnt/*' \
     --exclude='/media/*' \
     --exclude='/lost+found/' \
-    rsync://$RSYNC_HOST/ /mnt/gentoo/
+    -e "ssh -o StrictHostKeyChecking=no" \
+    $STAGE4_HOST:/ /mnt/gentoo/
+
+  mount --types proc /proc /mnt/gentoo/proc
+  mount --rbind /sys /mnt/gentoo/sys
+  mount --rbind /dev /mnt/gentoo/dev
+  mount --bind /run /mnt/gentoo/run
+
+  echo -e "${CYAN}### Changing root...${NC}"
+  cp /etc/resolv.conf /mnt/gentoo/etc/
+  chroot /mnt/gentoo /bin/bash -s <<- EOF
+  #!/bin/bash
+
+  set -e
+
+  env-update
+  source /etc/profile
+
+  # fstab
+  grub-install ${TARGET_DISK} >> install-log.txt
+  grub-mkconfig -o /boot/grub/grub.cfg >> install-log.txt
+
+  echo -e "${GREEN}### Finshed, time to reboot...${NC}"
+  echo -e "${YELLOW}### Remember, rsync does NOT modify any configs, set any passwords or install any software! ${NC}"
+  echo -e "${YELLOW}### If you need to change anything from the source server you should do it now.${NC}"
+EOF
 
 elif [ "$STAGE" = "STAGE3" ]; then
   echo -e "${CYAN}### Installing stage3...${NC}"
@@ -167,7 +211,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
   rm -f "$(basename "$STAGE3_URL")"
 
   echo "# added by gentoo installer" >> /mnt/gentoo/etc/fstab 
-  echo "LABEL=boot /boot ext4 noauto,noatime 1 2" >> /mnt/gentoo/etc/fstab 
+  echo "LABEL=boot /boot ext4 noatime        1 2" >> /mnt/gentoo/etc/fstab 
   echo "LABEL=swap none  swap sw             0 0" >> /mnt/gentoo/etc/fstab 
   echo "LABEL=root /     ext4 noatime        0 1" >> /mnt/gentoo/etc/fstab 
 
@@ -189,23 +233,19 @@ elif [ "$STAGE" = "STAGE3" ]; then
   chmod 1777 /dev/shm 
   if [ -d "/run/shm" ]; then chmod 1777 /run/shm ; fi
 
-  echo -e "${CYAN}### Changing root...${NC}"
-  cp /etc/resolv.conf /mnt/gentoo/etc/
   echo -e "${CYAN}### Entering chroot...${NC}"
+  cp /etc/resolv.conf /mnt/gentoo/etc/
   chroot /mnt/gentoo /bin/bash -s <<- EOF
   #!/bin/bash
 
   set -e
 
-  CYAN=\$CYAN
-  YELLOW=\$YELLOW
-  RED=\$RED
-  NC=\$NC
-
   echo -e "${CYAN}### Upading configuration...${NC}"
   env-update
   source /etc/profile
 
+  ln -s /usr/share/zoneinfo/$TIMEZONE /etc/localtime
+  echo "$TIMEZONE" > /etc/timezone
   echo -e "${CYAN}### Setting up portage...${NC}"
   mkdir -p /etc/portage/repos.conf
   cp -f /usr/share/portage/config/repos.conf /etc/portage/repos.conf/gentoo.conf
@@ -222,14 +262,11 @@ elif [ "$STAGE" = "STAGE3" ]; then
   echo "GENTOO_MIRRORS=\"$GENTOO_MIRROR\"" >> $EMERGE_MAKEPATH
   # required to allow for linux-firmware (required for binary kernel).
   echo "sys-kernel/installkernel dracut" >> /etc/portage/package.use/installkernel
-  
-  if echo "$EMERGE_PACKAGES" | grep -q "net-analyzer/munin"; then
-    echo "net-analyzer/munin minimal -cgi" >> /etc/portage/package.use/munin
-    echo "dev-lang/perl berkdb" >> /etc/portage/package.use/perl
-  fi
+
   echo "ACCEPT_LICENSE=\"-* @FREE\"" >> $EMERGE_MAKEPATH
   echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" >> /etc/portage/package.license
   echo "MAKEOPTS=\"-j$(nproc)\"" >> $EMERGE_MAKEPATH
+  echo "EMERGE_DEFAULT_OPTS=\"--jobs=$(nproc) --load-average=16 --with-bdeps=y -D\"" >> $EMERGE_MAKEPATH
   echo "GRUB_PLATFORMS=\"$GRUB_PLATFORMS\"" >> $EMERGE_MAKEPATH
 
 
@@ -242,11 +279,10 @@ elif [ "$STAGE" = "STAGE3" ]; then
     echo "FEATURES=\"distcc\"" >> $EMERGE_MAKEPATH
     echo "$tmpmakeconf" >> $EMERGE_MAKEPATH
     for host in $GENTOO_DISTCC; do echo "$host" >> /etc/distcc/hosts ; done
-    rc-update add distccd default
     distcc-config --set-hosts "localhost $GENTOO_DISTCC"
   fi
 
-  echo -e "${CYAN}### Installing kernel, this might time some time!...${NC}"munin
+  echo -e "${CYAN}### Installing kernel, this might time some time!...${NC}"
   emerge $EMERGE_ARGS sys-kernel/linux-firmware sys-kernel/installkernel >> install-log.txt 2>/dev/null
   emerge $EMERGE_ARGS virtual/dist-kernel sys-kernel/gentoo-kernel-bin >> install-log.txt 2>/dev/null
 
@@ -266,6 +302,12 @@ elif [ "$STAGE" = "STAGE3" ]; then
   ln -s /etc/init.d/net.lo /etc/init.d/net.eth0
   rc-update add net.eth0 default
 
+  # TODO make a variable for this?
+  if echo "$EMERGE_PACKAGES" | grep -q "net-analyzer/munin"; then
+    echo "net-analyzer/munin minimal -cgi" >> /etc/portage/package.use/munin
+    echo "dev-lang/perl berkdb" >> /etc/portage/package.use/perl
+  fi
+
   if [ -n "$EMERGE_PACKAGES" ]; then
     echo -e "${CYAN}### Installing additional packages this might take some time...${NC}"
     for p in $EMERGE_PACKAGES; do
@@ -274,6 +316,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
     done 
     emerge $EMERGE_ARGS $EMERGE_PACKAGES >> install-log.txt 2>/dev/null
   fi
+  echo "EMERGE_DEFAULT_OPTS=\"--jobs=$(nproc) --load-average=16 --quiet-build --with-bdeps=y --complete-graph=y -avD\"" >> $EMERGE_MAKEPATH
 
   if [ -n "$RC_UPDATE" ]; then
     echo -e "${CYAN}### Adding \"$RC_UPDATE\" to rc-update...${NC}"
@@ -302,8 +345,7 @@ elif [ "$STAGE" = "STAGE3" ]; then
 
   if [ -n "$CUSTOM_USER" ] && [ -n "$CUSTOMUSER_PASSWORD" ]; then
     echo -e "${CYAN}### Adding custom user and setting password...${NC}"
-    useradd -m -G users -s /bin/bash $CUSTOM_USER
-    gpasswd -a $CUSTOM_USER wheel
+    useradd -m -G users,wheel,cron -s /bin/bash $CUSTOM_USER
     echo -e "$CUSTOM_USER:$CUSTOMUSER_PASSWORD" | chpasswd >> install-log.txt
     if command -v sudo > /dev/null; then 
       mkdir /etc/sudoers.d/
@@ -320,13 +362,14 @@ elif [ "$STAGE" = "STAGE3" ]; then
     fi
   else
     echo -e "${CYAN}### Custom user not set, allowing root to login to ssh...${NC}"
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+    echo -e "PermitRootLogin yes" >> /etc/ssh/sshd_config.d/99-sshroot.conf
   fi
+  echo -e "${GREEN}### Finshed, time to reboot...${NC}"
+  echo -e "${GREEN}### Password for root and custom_user (if set) is in the scriptfile if you didnt set it...${NC}"
 EOF
 else
   echo -e "${RED}### Unsupported stage: $STAGE${NC}"
   exit 1
 fi
 
-echo -e "${GREEN}### Finshed, time to reboot...${NC}"
-echo -e "${GREEN}### Password for root and custom_user (if set) is in the scriptfile if you didnt set it...${NC}"
+

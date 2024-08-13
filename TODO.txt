@@ -19,14 +19,14 @@ install with rsync (instead of stage3\4)
 
 Test on 2GB ram server (NOTE TO SELF: archlinux fails to boot on 2GB)
 
-Change:
+TODO:
 - Rename variables and stuff to make more sense 
 - Make a sumary with password, installed software, etc
-- Check for PYTHON_SINGLE_TARGET version to set, had to make a temp fix due to multiple targets got dragged in
 - If partitions exist and is mounted i have to run the script twise, dunno why
 - Add support for setting static ip, else use dhcpcd (and add it to rc-update????)
-- instead for custom mirror of orgiginal mirror, use mirrorselect
+- instead of defining rsync mirror, use mirrorselect
 - eselect profile set 1
+- in rsync, redo fstab or sed change if partitions from source server is diffrent 
 
 Idea:
 - Make stage4 from template server
